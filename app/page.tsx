@@ -1,5 +1,5 @@
 import { PersonStandingIcon } from "lucide-react";
-import PersianProfileDialog from "./components/persianProfileDialog";
+import PersianProfileDialog from "./components/persianProfileEdit";
 
 
 

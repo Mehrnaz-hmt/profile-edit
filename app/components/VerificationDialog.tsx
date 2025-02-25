@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { toast } from "react-hot-toast";
 
 interface VerificationDialogProps {
   isOpen: boolean;
@@ -18,26 +19,29 @@ interface VerificationDialogProps {
   setIsVerified: (open: boolean) => void;
 }
 
-export default function VerificationDialog({isOpen,setIsOpen,expectedCode,isVerified,setIsVerified}: VerificationDialogProps) {
+export default function VerificationDialog({
+  isOpen,
+  setIsOpen,
+  expectedCode,
+  isVerified,
+  setIsVerified,
+}: VerificationDialogProps) {
   const [verificationCode, setVerificationCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleVerificationSubmit = async () => {
+  // Verify OTP
+  const handleVerificationSubmit = () => {
     setIsLoading(true);
     setTimeout(() => {
       if (verificationCode === expectedCode) {
         setIsVerified(true);
-        setTimeout(() => setIsOpen(false), 1500); // Close after 1.5 seconds
+        toast.success("شماره تأیید شد ✅");
+        setTimeout(() => setIsOpen(false), 1000);
       } else {
-        alert("کد تأیید نادرست است!");
+        toast.error("کد تأیید نادرست است ❌");
       }
       setIsLoading(false);
     }, 1000);
-  };
-
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-    setVerificationCode(value);
   };
 
   return (
@@ -53,7 +57,7 @@ export default function VerificationDialog({isOpen,setIsOpen,expectedCode,isVeri
             pattern="\d*"
             maxLength={4}
             value={verificationCode}
-            onChange={handleCodeChange}
+            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
             className="text-center text-2xl tracking-widest w-40"
             placeholder="0000"
             disabled={isVerified}
