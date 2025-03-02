@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import toast, { Toaster } from "react-hot-toast";
 import { FaEdit, FaTrash } from "react-icons/fa";
 import VerificationDialog from "./VerificationDialog";
-import Actions from  "./Actions"
 import Image from "next/image";
 import { Edit2 } from "lucide-react";
 
@@ -41,7 +40,8 @@ interface PersonData {
 export default function persianProfileEdit() {
   const persianRegex = /^[\u0600-\u06FF\s]*$/;
   const englishRegex = /^[A-Za-z\s]*$/;
-  const numberRegex = /^[0-9]+$/;
+  // const numberRegex = /^[0-9]+$/;
+  const numberRegex = /^09\d{9}$/;
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
   const [isEditing, setIsEditing] = useState(false);
@@ -63,6 +63,9 @@ export default function persianProfileEdit() {
   const [isLoading, setIsLoading] = useState(true);
   const [userData, setUserData] = useState<PersonData>();
   const [isClient, setIsClient] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  ); //when user is typing her/his phone number
 
   //send data to the server:
   useEffect(() => {
@@ -86,7 +89,11 @@ export default function persianProfileEdit() {
   }, [formData]);
 
   useEffect(() => {
-    const PhoneInput = ({onOTPReceived}: {onOTPReceived: (otp: string) => void}) => {
+    const PhoneInput = ({
+      onOTPReceived,
+    }: {
+      onOTPReceived: (otp: string) => void;
+    }) => {
       const [phoneNumber, setPhoneNumber] = useState("");
 
       const handleInputChange = async (
@@ -105,7 +112,7 @@ export default function persianProfileEdit() {
 
             if (response.ok) {
               const data = await response.json();
-              onOTPReceived(data.otp); 
+              onOTPReceived(data.otp);
             } else {
               console.error("Failed to send OTP");
             }
@@ -176,33 +183,19 @@ export default function persianProfileEdit() {
       toast.error("لطفا به انگلیسی تایپ کنید");
       return;
     }
-    if (
-      name === "phoneNumber" &&
-      (!numberRegex.test(value) || value.length > 11)
-    ) {
-      toast.error("شماره موبایل باید حداکثر ۱۱ رقم باشد و فقط عدد باشد");
-      return;
+
+    if (name === "phoneNumber") {
+      if (typingTimeout) clearTimeout(typingTimeout);
+      const newTimeout = setTimeout(() => {
+        if (value.length !== 11) {
+          toast.error("شماره موبایل باید دقیقاً ۱۱ رقم باشد");
+        }
+      }, 1000); // 1-second delay after user stops typing
+      setTypingTimeout(newTimeout);
     }
 
-    try {
-      const response = await fetch("/api/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber: formData.phoneNumber }),
-      });
-
-      if (!response.ok) throw new Error("خطا در دریافت کد تأیید");
-
-      const data = await response.json();
-      setVerificationCode(data.otp);
-      setIsDialogOpen(true);
-    } catch (error) {
-      toast.error("خطا در ارسال شماره تلفن");
-    }
     if (name === "email" && !emailRegex.test(value)) {
       toast.error("فرمت ایمیل صحیح نیست");
-
-      return;
     }
     setFormData({ ...formData, [name]: value });
   };
@@ -220,25 +213,29 @@ export default function persianProfileEdit() {
   };
 
   // phone editing moode
-  const handlePhoneSubmit = async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+  const handlePhoneSubmit = async (
+    e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+  ) => {
     e.preventDefault();
-  
-    if (formData.phoneNumber.length !== 11) {
-      toast.error("شماره تلفن باید 11 رقم باشد.");
-      return;
-    }
-  
+
     try {
-      const response = await fetch("/api/send-otp", {
+      const response = await fetch("/api/send-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phoneNumber: formData.phoneNumber }),
       });
-  
+
+      console.log("Sending phone number:", formData.phoneNumber); // Debug log
+
+      if (!formData.phoneNumber) {
+        toast.error("شماره تلفن را وارد کنید");
+        return;
+      }
+
       if (!response.ok) {
         throw new Error("خطا در دریافت کد تأیید");
       }
-  
+
       const data = await response.json();
       setVerificationCode(data.otp); // Save OTP for verification
       setIsDialogOpen(true); // Open the verification dialog
@@ -246,19 +243,6 @@ export default function persianProfileEdit() {
       toast.error("خطا در ارسال شماره تلفن");
     }
   };
-  // const handlePhoneSubmit = async (
-  //   e: React.MouseEvent<HTMLButtonElement, MouseEvent>
-  // ) => {
-  //   e.preventDefault();
-  //   try {
-  //     const code = await handler();
-  //     setVerificationCode(code);
-  //     setIsDialogOpen(true);
-  //   } catch (error) {
-  //     toast.error("خطا در دریافت کد تأیید");
-  //   }
-  // };
-
 
   // -------base64--convert image to text (for sending to server)
   const toBase64 = (file: File): Promise<string> =>
@@ -454,45 +438,42 @@ export default function persianProfileEdit() {
               </div>
 
               <Card className="mt-4">
-                 <CardContent>
-                   <div className="grid gap-4">
-                     <div>
-                       <Label htmlFor="phoneNumber">شماره تماس</Label>
-                       <div className="flex gap-2">
-                         <Input
-                           id="phoneNumber"
-                           name="phoneNumber"
-                           value={formData.phoneNumber}
-                           onChange={handleInputChange}
-                           placeholder="09123456789"
-                           disabled={isVerified}
-                           dir="ltr"
-                         />
-                         <Button onClick={handlePhoneSubmit} disabled={isVerified}>
-                           {isVerified ? "تأیید شد!" : "ثبت و دریافت کد"}
-                         </Button>
-                       </div>
-                     </div>
-                   </div>
-                 </CardContent>
-               </Card>
-         
-               <VerificationDialog
-                 isOpen={isDialogOpen}
-                 setIsOpen={setIsDialogOpen}
-                 expectedCode={verificationCode}
-                 isVerified={isVerified}
-                 setIsVerified={setIsVerified}
-               />
-          
+                <CardContent>
+                  <div className="grid gap-4">
+                    <div>
+                      <Label htmlFor="phoneNumber">شماره تماس</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="phoneNumber"
+                          name="phoneNumber"
+                          value={formData.phoneNumber}
+                          onChange={handleInputChange}
+                          placeholder="09123456789"
+                          disabled={isVerified}
+                          dir="ltr"
+                        />
+                        <Button
+                          onClick={handlePhoneSubmit}
+                          disabled={isVerified}
+                        >
+                          {isVerified ? "تأیید شد!" : "ثبت و دریافت کد"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <VerificationDialog
-                isOpen={isDialogOpen}
-                setIsOpen={setIsDialogOpen}
-                expectedCode={verificationCode}
-                isVerified={isVerified}
-                setIsVerified={setIsVerified}
-              />
+              {isDialogOpen && (
+                <VerificationDialog
+                  isOpen={isDialogOpen}
+                  setIsOpen={setIsDialogOpen}
+                  expectedCode={verificationCode}
+                  isVerified={isVerified}
+                  setIsVerified={setIsVerified}
+                  phoneNumber={formData.phoneNumber}
+                />
+              )}
 
               <div>
                 <Label htmlFor="email">ایمیل</Label>
@@ -518,7 +499,4 @@ export default function persianProfileEdit() {
       )}
     </div>
   );
-}
-{
-  console.log(FormData);
 }
